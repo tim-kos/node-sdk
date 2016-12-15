@@ -65,6 +65,93 @@ genericParams =
 
 describe "API integration", ->
   @timeout 100000
+
+  describe "not retrying in the case of 404", ->
+    it "should not display api inconsistency", (done) ->
+      @timeout 0
+
+      repeatUntilFails = (nattempts) ->
+        if nattempts == 25
+          return done()
+
+        client = new TransloaditClient { authKey, authSecret }
+        opts =
+          params:
+            steps:
+              resize:
+                robot:  "/image/resize"
+                use:    ":original"
+                result: true
+                width:  130
+                height: 130
+
+        # We need to ensure that the assembly doesn't complete before it can be
+        # canceled, so we start an http server for the assembly to import from,
+        # and delay transmission of data until we've already sent the cancel
+        # request
+
+        # Async book-keeping for delaying the response
+        # This would be much nicer with promises.
+        readyToServe = false
+        callback = -> undefined # No-op function
+
+        handler = (req, res) ->
+          handleRequest = ->
+            expect(url.parse(req.url).pathname).to.equal "/"
+
+            res.setHeader "Content-type", "image/jpeg"
+            res.writeHead 200
+            request.get(genericImg).pipe(res)
+
+          # delay serving the response until triggered
+          if readyToServe
+            handleRequest()
+          else
+            callback = handleRequest
+
+        startServer handler, (err, server) ->
+          expect(err).to.not.exist
+          # TODO the server won't close if the test fails
+
+          params =
+            params:
+              steps:
+                import:
+                  robot: "/http/import"
+                  url:   server.url
+                resize:
+                  robot:  "/image/resize"
+                  use:    "import"
+                  result: true
+                  width:  130
+                  height: 130
+
+          # Finally send the createAssembly request
+          client.createAssembly params, (err, result) ->
+            expect(err).to.not.exist
+
+            id = result.assembly_id
+
+            # Now delete it
+            client.deleteAssembly id, (err, result) ->
+              # Allow the upload to finish
+              readyToServe = true
+              callback()
+
+              expect(err).to.not.exist
+              expect(result.ok).to.equal "ASSEMBLY_CANCELED"
+
+              # Successful cancel requests get ASSEMBLY_CANCELED even when it
+              # completed, so we now request the assembly status to check the
+              # *actual* status.
+              client.getAssembly id, (err, result) ->
+                expect(err).to.not.exist
+                expect(result.ok).to.equal "ASSEMBLY_CANCELED"
+                server.close()
+                repeatUntilFails nattempts + 1
+
+      repeatUntilFails 0
+
   describe "assembly creation", ->
     it "should create a retrievable assembly on the server", (done) ->
       client = new TransloaditClient { authKey, authSecret }
