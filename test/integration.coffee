@@ -67,7 +67,7 @@ describe "API integration", ->
   @timeout 100000
 
   describe "not retrying in the case of 404", ->
-    it "should not display api inconsistency", (done) ->
+    it "should not display api inconsistency (expected to fail)", (done) ->
       @timeout 0
 
       repeatUntilFails = (nattempts) ->
