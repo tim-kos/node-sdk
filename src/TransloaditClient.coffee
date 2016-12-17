@@ -388,7 +388,7 @@ class TransloaditClient
         msg  += "Code: #{res.statusCode}. Body: #{abbr}. "
         return cb new Error msg
 
-      if res.statusCode != 200
+      if res.statusCode != 404 && 400 <= res.statusCode <= 599
         return cb _.extend (new Error), result
 
       cb null, result
