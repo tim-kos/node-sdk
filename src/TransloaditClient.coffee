@@ -343,6 +343,9 @@ class TransloaditClient
           operation._timeouts.unshift 1000 * err.info.retryIn
           return operation.retry err
 
+        if err?.statusCode? && (err.statusCode == 404 || err.statusCode < 400)
+          return cb err
+
         if operation.retry(err)
           return
 
@@ -389,7 +392,7 @@ class TransloaditClient
         return cb new Error msg
 
       if res.statusCode != 200
-        return cb _.extend (new Error), result
+        return cb _.extend (new Error), result, statusCode: res.statusCode
 
       cb null, result
 
