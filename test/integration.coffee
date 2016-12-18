@@ -53,3 +53,28 @@ describe "API integration", ->
         attempt 5, ->
           if --nremaining == 0
             done()
+
+    it "should only be called if the assembly is fetchable", (done) ->
+      client = new TransloaditClient { authKey, authSecret }
+
+      attempt = (nremaining, cb) ->
+        if nremaining == 0
+          return cb()
+
+        client.createAssembly genericParams, (err, result) ->
+          expect(err).to.not.exist
+
+          id = result.assembly_id
+
+          # Now delete it
+          client.getAssembly id, (err, result) ->
+            if err?
+              expect(err).to.have.property("statusCode").that.is.not.equal(404)
+
+            attempt nremaining - 1, cb
+
+      nremaining = 5
+      for i in [1..nremaining]
+        attempt 5, ->
+          if --nremaining == 0
+            done()
